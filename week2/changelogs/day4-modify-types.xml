@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 4 — Modifying Column Types and Constraints
+        Covers: modifyDataType, addDefaultValue, dropDefaultValue,
+                addNotNullConstraint, dropNotNullConstraint
+    -->
+
+    <!-- modifyDataType: widen a VARCHAR that's too short -->
+    <changeSet id="w2-day4-001" author="khushal">
+        <!--
+            products.description was TEXT but we want to enforce a max length.
+            More commonly: widening VARCHAR(50) → VARCHAR(100) because data outgrew it.
+            WARNING: narrowing a type (VARCHAR(100) → VARCHAR(50)) will fail if
+            existing data exceeds the new limit.
+        -->
+        <modifyDataType tableName="users"
+                        columnName="phone"
+                        newDataType="VARCHAR(30)"/>
+        <rollback>
+            <modifyDataType tableName="users"
+                            columnName="phone"
+                            newDataType="VARCHAR(20)"/>
+        </rollback>
+    </changeSet>
+
+    <!-- modifyDataType: change NUMERIC precision for price columns -->
+    <changeSet id="w2-day4-002" author="khushal">
+        <!--
+            Expanding NUMERIC(10,2) → NUMERIC(14,4) to support international
+            currencies that need more decimal places.
+            Safe to widen. Never narrow without checking existing data first.
+        -->
+        <modifyDataType tableName="products"
+                        columnName="price"
+                        newDataType="NUMERIC(14,4)"/>
+        <modifyDataType tableName="line_items"
+                        columnName="unit_price"
+                        newDataType="NUMERIC(14,4)"/>
+        <modifyDataType tableName="orders"
+                        columnName="total"
+                        newDataType="NUMERIC(14,4)"/>
+        <rollback>
+            <modifyDataType tableName="products"   columnName="price"      newDataType="NUMERIC(10,2)"/>
+            <modifyDataType tableName="line_items" columnName="unit_price" newDataType="NUMERIC(10,2)"/>
+            <modifyDataType tableName="orders"     columnName="total"      newDataType="NUMERIC(10,2)"/>
+        </rollback>
+    </changeSet>
+
+    <!-- addDefaultValue: add a default to an existing column -->
+    <changeSet id="w2-day4-003" author="khushal">
+        <!--
+            orders.status already has a DEFAULT in the CREATE TABLE SQL,
+            but if you need to add one later to an existing column, use this.
+            Here we're setting a default on users.updated_at.
+        -->
+        <addDefaultValue tableName="users"
+                         columnName="updated_at"
+                         defaultValueComputed="CURRENT_TIMESTAMP"/>
+        <rollback>
+            <dropDefaultValue tableName="users" columnName="updated_at"/>
+        </rollback>
+    </changeSet>
+
+    <!-- addNotNullConstraint: enforce NOT NULL on a previously nullable column -->
+    <changeSet id="w2-day4-004" author="khushal">
+        <!--
+            The safe 3-step pattern for adding NOT NULL:
+            Step 1: Backfill NULLs (can't add NOT NULL if any row is NULL)
+            Step 2: Add a default for future rows
+            Step 3: Add the NOT NULL constraint
+        -->
+
+        <!-- Step 1: Backfill -->
+        <update tableName="users">
+            <column name="updated_at" valueComputed="created_at"/>
+            <where>updated_at IS NULL</where>
+        </update>
+
+        <!-- Step 3: Enforce NOT NULL (default was set in day4-003) -->
+        <addNotNullConstraint tableName="users"
+                              columnName="updated_at"
+                              columnDataType="TIMESTAMP"/>
+        <rollback>
+            <dropNotNullConstraint tableName="users"
+                                   columnName="updated_at"
+                                   columnDataType="TIMESTAMP"/>
+        </rollback>
+    </changeSet>
+
+    <!-- dropDefaultValue: remove a default that is no longer needed -->
+    <changeSet id="w2-day4-005" author="khushal">
+        <!--
+            If application code always sets updated_at explicitly,
+            we don't need the DB default anymore.
+            (This is intentionally illustrative — leave it if your app doesn't set it.)
+        -->
+        <dropDefaultValue tableName="users" columnName="updated_at" columnDataType="TIMESTAMP"/>
+        <rollback>
+            <addDefaultValue tableName="users"
+                             columnName="updated_at"
+                             defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

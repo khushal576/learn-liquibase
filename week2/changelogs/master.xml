@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!-- Week 1 baseline must be applied first -->
+    <include file="changelog/../../week1/changelogs/master.xml"/>
+
+    <!-- Day 1: Table and column operations -->
+    <include file="changelog/day1-table-column-ops.xml"/>
+
+    <!-- Day 2: Constraints and indexes -->
+    <include file="changelog/day2-constraints-indexes.xml"/>
+
+    <!-- Day 3: Data migrations -->
+    <include file="changelog/day3-data-migrations.xml"/>
+
+    <!-- Day 4: Modify types and not-null -->
+    <include file="changelog/day4-modify-types.xml"/>
+
+    <!-- Day 5: Raw SQL and sqlFile -->
+    <include file="changelog/day5-raw-sql.xml"/>
+
+    <!-- Day 6: includeAll pattern (loads week2/changelogs/patches/*.xml) -->
+    <includeAll path="changelog/patches/"/>
+
+    <!-- Day 7: Contexts and labels -->
+    <include file="changelog/day7-contexts-labels.xml"/>
+
+</databaseChangeLog>

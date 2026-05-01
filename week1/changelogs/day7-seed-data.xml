@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 7 — Seed data + understanding DATABASECHANGELOG.
+
+        After running `liquibase update`, connect to the DB and run:
+          SELECT * FROM DATABASECHANGELOG ORDER BY dateexecuted;
+
+        You will see every changeset with:
+          - ID, AUTHOR, FILENAME
+          - MD5SUM (hash of the changeset — changing it breaks deployment)
+          - DATEEXECUTED, ORDEREXECUTED
+          - EXECTYPE (EXECUTED / MARK_RAN / RERAN)
+
+        DATABASECHANGELOGLOCK table:
+          Liquibase locks this table before running to prevent
+          concurrent migrations in multi-instance deployments.
+    -->
+
+    <!--
+        context="dev" means this changeset ONLY runs when you pass:
+          liquibase update --contexts=dev
+
+        It will be SKIPPED in production if you pass --contexts=prod.
+        Use this to keep test seed data out of production.
+    -->
+    <changeSet id="day7-001" author="khushal" context="dev">
+        <insert tableName="users">
+            <column name="username" value="alice"/>
+            <column name="email" value="alice@example.com"/>
+            <column name="full_name" value="Alice Smith"/>
+        </insert>
+        <insert tableName="users">
+            <column name="username" value="bob"/>
+            <column name="email" value="bob@example.com"/>
+            <column name="full_name" value="Bob Jones"/>
+        </insert>
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('alice', 'bob')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="day7-002" author="khushal" context="dev">
+        <insert tableName="products">
+            <column name="name" value="Laptop Pro 15"/>
+            <column name="description" value="High-performance laptop"/>
+            <column name="price" valueNumeric="1299.99"/>
+            <column name="stock_quantity" valueNumeric="50"/>
+        </insert>
+        <insert tableName="products">
+            <column name="name" value="Wireless Mouse"/>
+            <column name="description" value="Ergonomic wireless mouse"/>
+            <column name="price" valueNumeric="29.99"/>
+            <column name="stock_quantity" valueNumeric="200"/>
+        </insert>
+        <rollback>
+            <delete tableName="products">
+                <where>name IN ('Laptop Pro 15', 'Wireless Mouse')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

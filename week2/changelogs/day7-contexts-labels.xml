@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 7 — Contexts and Labels in Depth
+        Covers: context expressions, label expressions, combining both,
+                passing them via CLI and liquibase.properties
+    -->
+
+    <!-- Context: dev only — fake users for local testing -->
+    <changeSet id="w2-day7-001" author="khushal" context="dev">
+        <insert tableName="users">
+            <column name="username" value="dev_tester"/>
+            <column name="email" value="tester@localhost.dev"/>
+            <column name="full_name" value="Dev Tester"/>
+            <column name="status" value="ACTIVE"/>
+            <column name="updated_at" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+        <rollback>
+            <delete tableName="users"><where>username = 'dev_tester'</where></delete>
+        </rollback>
+    </changeSet>
+
+    <!-- Context: staging only — performance test data -->
+    <changeSet id="w2-day7-002" author="khushal" context="staging">
+        <insert tableName="categories">
+            <column name="name" value="Staging Test Category"/>
+            <column name="slug" value="staging-test"/>
+        </insert>
+        <rollback>
+            <delete tableName="categories"><where>slug = 'staging-test'</where></delete>
+        </rollback>
+    </changeSet>
+
+    <!-- Context: prod only — create a production-specific index CONCURRENTLY -->
+    <changeSet id="w2-day7-003" author="khushal" context="prod">
+        <!--
+            CREATE INDEX CONCURRENTLY doesn't lock the table — essential in production.
+            In dev this is overkill (small data), but in prod it's necessary.
+            Use context="prod" to run this version only in production.
+        -->
+        <sql>
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_created_at
+                ON orders(created_at DESC);
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_orders_created_at;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Context: dev OR staging (comma = OR) -->
+    <changeSet id="w2-day7-004" author="khushal" context="dev,staging">
+        <insert tableName="coupons">
+            <column name="code" value="TESTCOUPON20"/>
+            <column name="discount_pct" valueNumeric="20.00"/>
+            <column name="max_uses" valueNumeric="9999"/>
+        </insert>
+        <rollback>
+            <delete tableName="coupons"><where>code = 'TESTCOUPON20'</where></delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Labels — more powerful filtering than contexts.
+        Labels use expression syntax: AND (&), OR (,), NOT (!)
+    -->
+
+    <!-- Label: feature flag — only run when this label is active -->
+    <changeSet id="w2-day7-005" author="khushal" labels="feature-loyalty-points">
+        <!--
+            Schema for a loyalty points system — only deployed when the
+            feature team is ready to enable it.
+            Run with: liquibase update --labels="feature-loyalty-points"
+        -->
+        <createTable tableName="loyalty_points">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="points" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="loyalty_points"
+            baseColumnNames="user_id"
+            constraintName="fk_loyalty_user"
+            referencedTableName="users"
+            referencedColumnNames="id"/>
+        <rollback>
+            <dropTable tableName="loyalty_points"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Labels + Contexts together -->
+    <changeSet id="w2-day7-006" author="khushal"
+               context="dev,staging"
+               labels="feature-loyalty-points">
+        <!--
+            Both must match: context AND label.
+            Only runs when context is dev or staging AND label is feature-loyalty-points.
+            Run with: liquibase update --contexts=dev --labels="feature-loyalty-points"
+        -->
+        <insert tableName="loyalty_points">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'dev_tester')"/>
+            <column name="points" valueNumeric="500"/>
+        </insert>
+        <rollback>
+            <delete tableName="loyalty_points">
+                <where>user_id = (SELECT id FROM users WHERE username = 'dev_tester')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

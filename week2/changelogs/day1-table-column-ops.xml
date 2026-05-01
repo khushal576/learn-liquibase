@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 1 — Table and Column Operations
+        Builds on the week1 schema: users, orders, products, order_items
+        Adds: categories table, links products to categories, extends users
+    -->
+
+    <!-- createTable: add a product categories table -->
+    <changeSet id="w2-day1-001" author="khushal">
+        <createTable tableName="categories">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(80)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="slug" type="VARCHAR(80)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="parent_id" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- Self-referencing FK: a category can have a parent category -->
+        <addForeignKeyConstraint
+            baseTableName="categories"
+            baseColumnNames="parent_id"
+            constraintName="fk_categories_parent"
+            referencedTableName="categories"
+            referencedColumnNames="id"/>
+        <rollback>
+            <dropTable tableName="categories"/>
+        </rollback>
+    </changeSet>
+
+    <!-- addColumn: link products to a category -->
+    <changeSet id="w2-day1-002" author="khushal">
+        <addColumn tableName="products">
+            <column name="category_id" type="BIGINT"/>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="products"
+            baseColumnNames="category_id"
+            constraintName="fk_products_category"
+            referencedTableName="categories"
+            referencedColumnNames="id"/>
+        <rollback>
+            <dropForeignKeyConstraint
+                baseTableName="products"
+                constraintName="fk_products_category"/>
+            <dropColumn tableName="products" columnName="category_id"/>
+        </rollback>
+    </changeSet>
+
+    <!-- addColumn: add multiple columns to users in one changeset -->
+    <changeSet id="w2-day1-003" author="khushal">
+        <addColumn tableName="users">
+            <column name="phone" type="VARCHAR(20)"/>
+            <column name="date_of_birth" type="DATE"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="users">
+                <column name="phone"/>
+                <column name="date_of_birth"/>
+                <column name="updated_at"/>
+            </dropColumn>
+        </rollback>
+    </changeSet>
+
+    <!-- dropColumn: remove the is_active column (we'll use a status enum instead) -->
+    <changeSet id="w2-day1-004" author="khushal">
+        <!-- Best practice: capture the old column value before dropping -->
+        <!-- Here we add the replacement column first, copy data, then drop -->
+        <addColumn tableName="users">
+            <column name="status" type="VARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <!--
+            Copy existing boolean is_active → status string.
+            Existing rows: is_active=true → 'ACTIVE', is_active=false → 'INACTIVE'
+        -->
+        <update tableName="users">
+            <column name="status" value="INACTIVE"/>
+            <where>is_active = false</where>
+        </update>
+        <dropColumn tableName="users" columnName="is_active"/>
+        <rollback>
+            <addColumn tableName="users">
+                <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+            <update tableName="users">
+                <column name="is_active" valueBoolean="false"/>
+                <where>status = 'INACTIVE'</where>
+            </update>
+            <dropColumn tableName="users" columnName="status"/>
+        </rollback>
+    </changeSet>
+
+    <!-- renameTable: rename order_items to line_items (cleaner domain name) -->
+    <changeSet id="w2-day1-005" author="khushal">
+        <renameTable oldTableName="order_items" newTableName="line_items"/>
+        <rollback>
+            <renameTable oldTableName="line_items" newTableName="order_items"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

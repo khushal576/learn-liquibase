@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: liquibase_db
+    environment:
+      POSTGRES_USER: liquibase
+      POSTGRES_PASSWORD: liquibase123
+      POSTGRES_DB: learndb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liquibase -d learndb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Week 1 runner — applies week1/changelogs/master.xml
+  liquibase-week1:
+    image: liquibase/liquibase:4.27
+    container_name: liquibase_week1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../:/liquibase/project
+    working_dir: /liquibase/project
+    entrypoint: ["liquibase"]
+    command:
+      - "--url=jdbc:postgresql://postgres:5432/learndb"
+      - "--username=liquibase"
+      - "--password=liquibase123"
+      - "--changeLogFile=week1/changelogs/master.xml"
+      - "update"
+
+  # Week 2 runner — applies week1 + week2 changelogs
+  liquibase-week2:
+    image: liquibase/liquibase:4.27
+    container_name: liquibase_week2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../:/liquibase/project
+    working_dir: /liquibase/project
+    entrypoint: ["liquibase"]
+    command:
+      - "--url=jdbc:postgresql://postgres:5432/learndb"
+      - "--username=liquibase"
+      - "--password=liquibase123"
+      - "--changeLogFile=week2/changelogs/master.xml"
+      - "update"
+
+  # Generic runner — pass command via `docker compose run`
+  # Example: docker compose run --rm liquibase --changeLogFile=week2/changelogs/master.xml status
+  liquibase:
+    image: liquibase/liquibase:4.27
+    container_name: liquibase_runner
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../:/liquibase/project
+    working_dir: /liquibase/project
+    entrypoint: ["liquibase"]
+    command:
+      - "--url=jdbc:postgresql://postgres:5432/learndb"
+      - "--username=liquibase"
+      - "--password=liquibase123"
+      - "--changeLogFile=week1/changelogs/master.xml"
+      - "update"
+
+volumes:
+  pgdata:

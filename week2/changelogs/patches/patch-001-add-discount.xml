@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 6 — includeAll DEMO: patch file 1
+        This file is auto-discovered by the <includeAll path="changelog/patches/"/> in master.xml.
+        Files in the patches/ folder are loaded in ALPHABETICAL ORDER — so name them carefully.
+    -->
+
+    <changeSet id="w2-day6-patch001-001" author="khushal">
+        <addColumn tableName="products">
+            <column name="discount_pct" type="NUMERIC(5,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="products" columnName="discount_pct"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

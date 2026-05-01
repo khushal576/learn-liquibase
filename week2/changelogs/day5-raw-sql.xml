@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 5 — Raw SQL and sqlFile Change Types
+        Covers: <sql>, <sqlFile>, stored functions, views, triggers,
+                splitStatements, endDelimiter, stripComments
+    -->
+
+    <!-- sql: inline SQL for things Liquibase change types don't cover -->
+    <changeSet id="w2-day5-001" author="khushal">
+        <!--
+            Creating a VIEW — no native Liquibase change type for this.
+            Use <sql> for: views, functions, triggers, sequences, grants,
+            any DDL that Liquibase doesn't have a built-in type for.
+        -->
+        <sql>
+            CREATE OR REPLACE VIEW v_order_summary AS
+            SELECT
+                o.id         AS order_id,
+                u.username,
+                u.email,
+                o.status,
+                o.total,
+                o.created_at,
+                COUNT(li.id) AS item_count
+            FROM orders o
+            JOIN users u       ON u.id = o.user_id
+            LEFT JOIN line_items li ON li.order_id = o.id
+            GROUP BY o.id, u.username, u.email, o.status, o.total, o.created_at;
+        </sql>
+        <rollback>
+            <sql>DROP VIEW IF EXISTS v_order_summary;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- sql: stored function with splitStatements:false -->
+    <changeSet id="w2-day5-002" author="khushal" splitStatements="false">
+        <!--
+            splitStatements="false" is REQUIRED for stored procedures and functions
+            because their body contains semicolons that must NOT be treated as
+            statement delimiters. Without it, Liquibase splits at every ; and
+            sends broken fragments to the database.
+        -->
+        <sql>
+            CREATE OR REPLACE FUNCTION calculate_order_total(p_order_id BIGINT)
+            RETURNS NUMERIC AS $$
+            DECLARE
+                v_total NUMERIC;
+            BEGIN
+                SELECT COALESCE(SUM(quantity * unit_price), 0)
+                INTO v_total
+                FROM line_items
+                WHERE order_id = p_order_id;
+
+                RETURN v_total;
+            END;
+            $$ LANGUAGE plpgsql;
+        </sql>
+        <rollback>
+            <sql>DROP FUNCTION IF EXISTS calculate_order_total(BIGINT);</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- sql: trigger to auto-update users.updated_at -->
+    <changeSet id="w2-day5-003" author="khushal" splitStatements="false">
+        <sql>
+            CREATE OR REPLACE FUNCTION set_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trg_users_updated_at
+                BEFORE UPDATE ON users
+                FOR EACH ROW
+                EXECUTE FUNCTION set_updated_at();
+        </sql>
+        <rollback>
+            <sql>
+                DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
+                DROP FUNCTION IF EXISTS set_updated_at();
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- sqlFile: load SQL from an external file -->
+    <changeSet id="w2-day5-004" author="khushal" splitStatements="false">
+        <!--
+            sqlFile is ideal when:
+              - The SQL is long and would clutter the changelog
+              - A DBA writes the SQL separately
+              - You want the SQL file reviewable on its own in Git
+            Path is relative to the changelog file.
+        -->
+        <sqlFile path="../../week2/sql/create-audit-log.sql"
+                 relativeToChangelogFile="false"
+                 encoding="UTF-8"
+                 splitStatements="false"/>
+        <rollback>
+            <sql>
+                DROP TRIGGER IF EXISTS trg_users_audit ON users;
+                DROP FUNCTION IF EXISTS audit_user_changes();
+                DROP TABLE IF EXISTS audit_log;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- sql: runOnChange — re-run when content changes (for managed objects) -->
+    <changeSet id="w2-day5-005" author="khushal"
+               runOnChange="true"
+               splitStatements="false">
+        <!--
+            runOnChange="true" is appropriate for:
+              - Views (use CREATE OR REPLACE VIEW)
+              - Stored functions (use CREATE OR REPLACE FUNCTION)
+              - Any "managed object" where you want the DB to always reflect
+                the latest version in source control
+
+            Do NOT use runOnChange for DDL like CREATE TABLE or ALTER TABLE —
+            those are irreversible and would break on re-run.
+        -->
+        <sql>
+            CREATE OR REPLACE VIEW v_product_catalog AS
+            SELECT
+                p.id,
+                p.name,
+                p.price,
+                p.stock_quantity,
+                c.name AS category_name,
+                c.slug AS category_slug
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.category_id
+            WHERE p.stock_quantity > 0
+            ORDER BY c.name, p.name;
+        </sql>
+        <rollback>
+            <sql>DROP VIEW IF EXISTS v_product_catalog;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 3 — Data Migrations
+        Covers: insert, update, delete, loadData (CSV), loadUpdateData
+        Rule: data migrations belong in changelogs too — never run them manually.
+    -->
+
+    <!-- insert: required reference / lookup data (not dev-only seed) -->
+    <changeSet id="w2-day3-001" author="khushal">
+        <!--
+            No context="dev" here — categories are REQUIRED data in all envs.
+            This is "reference data", not "test data".
+        -->
+        <insert tableName="categories">
+            <column name="name" value="Electronics"/>
+            <column name="slug" value="electronics"/>
+        </insert>
+        <insert tableName="categories">
+            <column name="name" value="Computers"/>
+            <column name="slug" value="computers"/>
+        </insert>
+        <insert tableName="categories">
+            <column name="name" value="Accessories"/>
+            <column name="slug" value="accessories"/>
+        </insert>
+        <rollback>
+            <delete tableName="categories">
+                <where>slug IN ('electronics', 'computers', 'accessories')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!-- update: backfill new column with computed values -->
+    <changeSet id="w2-day3-002" author="khushal">
+        <!--
+            Link existing products to categories by name matching.
+            This is a backfill migration — runs once, assigns category_id to
+            products that were created before the category_id column existed.
+        -->
+        <sql>
+            UPDATE products p
+            SET category_id = (
+                SELECT c.id FROM categories c WHERE c.slug = 'electronics'
+            )
+            WHERE p.name ILIKE '%laptop%'
+               OR p.name ILIKE '%monitor%'
+               OR p.name ILIKE '%keyboard%';
+
+            UPDATE products p
+            SET category_id = (
+                SELECT c.id FROM categories c WHERE c.slug = 'accessories'
+            )
+            WHERE p.name ILIKE '%mouse%'
+               OR p.name ILIKE '%cable%'
+               OR p.name ILIKE '%charger%';
+        </sql>
+        <rollback>
+            <!-- Undo: set category_id back to NULL for those rows -->
+            <update tableName="products">
+                <column name="category_id"/>
+                <where>category_id IS NOT NULL</where>
+            </update>
+        </rollback>
+    </changeSet>
+
+    <!-- delete: remove stale or invalid data as part of a migration -->
+    <changeSet id="w2-day3-003" author="khushal">
+        <!--
+            Clean up CANCELLED orders older than some threshold.
+            In practice, archive instead of delete. Here for illustration.
+        -->
+        <delete tableName="orders">
+            <where>status = 'CANCELLED' AND created_at &lt; NOW() - INTERVAL '1 year'</where>
+        </delete>
+        <!--
+            Note: &lt; is XML escape for '<'
+            In YAML you'd write: where: "status = 'CANCELLED' AND created_at < NOW() - INTERVAL '1 year'"
+            In SQL format: just write < normally
+        -->
+        <rollback>
+            <!-- Data deletion rollback is intentionally empty.
+                 You cannot recover deleted rows without a backup.
+                 Always backup before running delete migrations in production. -->
+        </rollback>
+    </changeSet>
+
+    <!-- loadData: bulk insert from a CSV file -->
+    <changeSet id="w2-day3-004" author="khushal" context="dev">
+        <!--
+            loadData reads a CSV and inserts each row.
+            The CSV must have a header row matching column names.
+            File path is relative to the changelog file.
+        -->
+        <loadData tableName="products"
+                  file="../../week2/sql/products-seed.csv"
+                  separator=","
+                  encoding="UTF-8">
+            <column name="name"           type="STRING"/>
+            <column name="description"    type="STRING"/>
+            <column name="price"          type="NUMERIC"/>
+            <column name="stock_quantity" type="NUMERIC"/>
+        </loadData>
+        <rollback>
+            <delete tableName="products">
+                <where>name IN (
+                    SELECT name FROM products
+                    WHERE created_at >= CURRENT_DATE
+                )</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!-- loadUpdateData: insert or update based on a primary key -->
+    <changeSet id="w2-day3-005" author="khushal" context="dev">
+        <!--
+            loadUpdateData does upsert (INSERT or UPDATE).
+            It checks the primaryKey column — if a row exists, it updates it.
+            Useful for reference data that may already exist.
+        -->
+        <loadUpdateData tableName="categories"
+                        file="../../week2/sql/categories-seed.csv"
+                        separator=","
+                        primaryKey="slug">
+            <column name="name" type="STRING"/>
+            <column name="slug" type="STRING"/>
+        </loadUpdateData>
+        <rollback>
+            <!-- loadUpdateData rollback is complex — document the state instead -->
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

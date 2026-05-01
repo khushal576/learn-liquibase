@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 6 — CLI commands to try after running `liquibase update`:
+
+        1. Check what's been applied:
+           liquibase status --verbose
+
+        2. Validate the changelog has no errors:
+           liquibase validate
+
+        3. Preview the SQL without applying:
+           liquibase updateSQL
+
+        4. Tag the current state before changes:
+           liquibase tag --tag=week1-day6
+
+        5. Rollback to the tag:
+           liquibase rollback --tag=week1-day6
+    -->
+
+    <!-- Adding a column to an existing table — shows ALTER TABLE pattern -->
+    <changeSet id="day6-001" author="khushal">
+        <addColumn tableName="users">
+            <column name="full_name" type="VARCHAR(100)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="users" columnName="full_name"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Rename a column — real-world: cleaning up a bad initial name -->
+    <changeSet id="day6-002" author="khushal">
+        <renameColumn tableName="products"
+                      oldColumnName="stock_qty"
+                      newColumnName="stock_quantity"
+                      columnDataType="INT"/>
+        <rollback>
+            <renameColumn tableName="products"
+                          oldColumnName="stock_quantity"
+                          newColumnName="stock_qty"
+                          columnDataType="INT"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Add a unique index on products.name -->
+    <changeSet id="day6-003" author="khushal">
+        <createIndex tableName="products" indexName="idx_products_name" unique="true">
+            <column name="name"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="products" indexName="idx_products_name"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

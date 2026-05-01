@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 2 — Constraints and Indexes
+        Covers: addUniqueConstraint, addNotNullConstraint,
+                addCheckConstraint, createIndex (composite, partial),
+                dropIndex, dropUniqueConstraint
+    -->
+
+    <!-- addUniqueConstraint: named unique constraint across multiple columns -->
+    <changeSet id="w2-day2-001" author="khushal">
+        <!--
+            Composite unique: same product can't appear twice in the same order.
+            This is better than a unique index because it's named and documented.
+        -->
+        <addUniqueConstraint
+            tableName="line_items"
+            columnNames="order_id, product_id"
+            constraintName="uq_line_items_order_product"/>
+        <rollback>
+            <dropUniqueConstraint
+                tableName="line_items"
+                constraintName="uq_line_items_order_product"/>
+        </rollback>
+    </changeSet>
+
+    <!-- addCheckConstraint: enforce business rules at the DB level -->
+    <changeSet id="w2-day2-002" author="khushal">
+        <!-- quantity must be positive -->
+        <sql>
+            ALTER TABLE line_items
+                ADD CONSTRAINT chk_line_items_qty CHECK (quantity > 0);
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE line_items DROP CONSTRAINT chk_line_items_qty;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="w2-day2-003" author="khushal">
+        <!-- price must be non-negative -->
+        <sql>
+            ALTER TABLE products
+                ADD CONSTRAINT chk_products_price CHECK (price >= 0);
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE products DROP CONSTRAINT chk_products_price;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- createIndex: composite index for common query pattern -->
+    <changeSet id="w2-day2-004" author="khushal">
+        <!--
+            Queries like: SELECT * FROM orders WHERE user_id=? AND status=?
+            benefit from a composite index on (user_id, status).
+            Column order matters: put the most selective column first.
+        -->
+        <createIndex tableName="orders" indexName="idx_orders_user_status">
+            <column name="user_id"/>
+            <column name="status"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="orders" indexName="idx_orders_user_status"/>
+        </rollback>
+    </changeSet>
+
+    <!-- createIndex: partial index (only index active users) -->
+    <changeSet id="w2-day2-005" author="khushal">
+        <!--
+            Partial indexes only index rows matching the WHERE clause.
+            Much smaller and faster than full indexes when queries always filter by status.
+            NOTE: partial indexes are PostgreSQL-specific — use <sql> instead of <createIndex>
+        -->
+        <sql>
+            CREATE INDEX idx_users_active_email
+                ON users(email)
+                WHERE status = 'ACTIVE';
+        </sql>
+        <rollback>
+            <sql>DROP INDEX idx_users_active_email;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- addNotNullConstraint with a defaultValue for existing rows -->
+    <changeSet id="w2-day2-006" author="khushal">
+        <!--
+            You cannot simply ADD NOT NULL to a column that has NULLs.
+            The safe pattern:
+              1. Add a default so existing/future NULLs are filled
+              2. Backfill any existing NULLs
+              3. Then add the NOT NULL constraint
+        -->
+        <addDefaultValue tableName="products"
+                         columnName="stock_quantity"
+                         defaultValueNumeric="0"/>
+        <sql>UPDATE products SET stock_quantity = 0 WHERE stock_quantity IS NULL;</sql>
+        <addNotNullConstraint tableName="products"
+                              columnName="stock_quantity"
+                              columnDataType="INT"/>
+        <rollback>
+            <dropNotNullConstraint tableName="products"
+                                   columnName="stock_quantity"
+                                   columnDataType="INT"/>
+        </rollback>
+    </changeSet>
+
+    <!-- dropIndex: remove an index that is hurting write performance -->
+    <changeSet id="w2-day2-007" author="khushal">
+        <!--
+            The idx_products_name unique index from week1 day6 is being
+            replaced by the unique constraint on name (defined at createTable).
+            Duplicate coverage = wasted disk and slower writes.
+        -->
+        <dropIndex tableName="products" indexName="idx_products_name"/>
+        <rollback>
+            <createIndex tableName="products" indexName="idx_products_name" unique="true">
+                <column name="name"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

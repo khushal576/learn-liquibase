@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!-- Day 3: First table - XML format -->
+    <include file="changelog/day3-create-users-xml.xml"/>
+
+    <!-- Day 4: Same change rewritten in SQL format -->
+    <include file="changelog/day4-create-orders-sql.sql"/>
+
+    <!-- Day 5: YAML format example -->
+    <include file="changelog/day5-create-products-yaml.yaml"/>
+
+    <!-- Day 6: Multiple constraint changes -->
+    <include file="changelog/day6-add-constraints.xml"/>
+
+    <!-- Day 7: Verify DATABASECHANGELOG with a query -->
+    <include file="changelog/day7-seed-data.xml"/>
+
+</databaseChangeLog>

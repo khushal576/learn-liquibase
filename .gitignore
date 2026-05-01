@@ -1,0 +1,15 @@
+# Liquibase
+*.log
+liquibase.properties.local
+
+# Docker
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
