@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 4 — Schema changes used to demonstrate `liquibase diff`
+
+        Workflow for the diff exercise:
+          1. Apply week1+2 to database A (learndb)
+          2. Apply week1+2+3 to database B (learndb_v2) — a separate DB
+          3. Run: liquibase diff --referenceUrl=... --url=...
+          4. See what changed between A and B
+          5. Run: liquibase diffChangeLog to generate a changelog from the diff
+
+        See day4 notes for the full Docker commands.
+    -->
+
+    <changeSet id="w3-day4-001" author="khushal">
+        <createTable tableName="notifications">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_read" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="notifications" baseColumnNames="user_id"
+            constraintName="fk_notifications_user"
+            referencedTableName="users" referencedColumnNames="id"/>
+        <rollback>
+            <dropTable tableName="notifications"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="w3-day4-002" author="khushal">
+        <addColumn tableName="orders">
+            <column name="shipping_address" type="TEXT"/>
+            <column name="shipped_at" type="TIMESTAMP"/>
+            <column name="delivered_at" type="TIMESTAMP"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="orders">
+                <column name="shipping_address"/>
+                <column name="shipped_at"/>
+                <column name="delivered_at"/>
+            </dropColumn>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

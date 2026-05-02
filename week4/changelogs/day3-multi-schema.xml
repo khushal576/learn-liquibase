@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 3 — Multi-Schema Management
+        Demonstrates creating and using multiple PostgreSQL schemas.
+        Schema = namespace within a database (like a folder for tables).
+        In PostgreSQL: public, analytics, reporting are all schemas in the same DB.
+    -->
+
+    <!-- Create separate schemas for different domains -->
+    <changeSet id="w4-day3-001" author="khushal">
+        <sql>CREATE SCHEMA IF NOT EXISTS analytics;</sql>
+        <sql>CREATE SCHEMA IF NOT EXISTS reporting;</sql>
+        <rollback>
+            <sql>DROP SCHEMA IF EXISTS reporting CASCADE;</sql>
+            <sql>DROP SCHEMA IF EXISTS analytics CASCADE;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Create a table in the analytics schema -->
+    <changeSet id="w4-day3-002" author="khushal">
+        <createTable tableName="order_metrics" schemaName="analytics">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="metric_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_orders" type="INT" defaultValueNumeric="0"/>
+            <column name="total_revenue" type="NUMERIC(14,4)" defaultValueNumeric="0"/>
+            <column name="avg_order_value" type="NUMERIC(14,4)"/>
+            <column name="new_customers" type="INT" defaultValueNumeric="0"/>
+            <column name="calculated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="order_metrics"
+                     indexName="idx_order_metrics_date"
+                     schemaName="analytics">
+            <column name="metric_date"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="order_metrics" schemaName="analytics"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Create a reporting table in its own schema -->
+    <changeSet id="w4-day3-003" author="khushal">
+        <createTable tableName="monthly_sales" schemaName="reporting">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="year" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="month" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revenue" type="NUMERIC(14,4)"/>
+            <column name="order_count" type="INT"/>
+            <column name="generated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="monthly_sales"
+            columnNames="year, month"
+            constraintName="uq_monthly_sales_period"
+            schemaName="reporting"/>
+        <rollback>
+            <dropTable tableName="monthly_sales" schemaName="reporting"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Cross-schema view: joins public schema with analytics schema -->
+    <changeSet id="w4-day3-004" author="khushal" splitStatements="false">
+        <sql>
+            CREATE OR REPLACE VIEW reporting.v_daily_performance AS
+            SELECT
+                m.metric_date,
+                m.total_orders,
+                m.total_revenue,
+                m.avg_order_value,
+                m.new_customers
+            FROM analytics.order_metrics m
+            ORDER BY m.metric_date DESC;
+        </sql>
+        <rollback>
+            <sql>DROP VIEW IF EXISTS reporting.v_daily_performance;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Grant permissions across schemas (common in multi-tenant setups) -->
+    <changeSet id="w4-day3-005" author="khushal">
+        <sql>
+            -- Grant read-only access to analytics schema
+            GRANT USAGE ON SCHEMA analytics TO liquibase;
+            GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO liquibase;
+
+            -- Grant read-only access to reporting schema
+            GRANT USAGE ON SCHEMA reporting TO liquibase;
+            GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO liquibase;
+        </sql>
+        <rollback>
+            <sql>
+                REVOKE ALL ON ALL TABLES IN SCHEMA reporting FROM liquibase;
+                REVOKE USAGE ON SCHEMA reporting FROM liquibase;
+                REVOKE ALL ON ALL TABLES IN SCHEMA analytics FROM liquibase;
+                REVOKE USAGE ON SCHEMA analytics FROM liquibase;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

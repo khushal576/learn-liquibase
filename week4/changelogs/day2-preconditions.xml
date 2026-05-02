@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 2 — Preconditions
+        Preconditions guard a changeset. They check a condition BEFORE running.
+        If the condition fails, Liquibase either skips or errors, depending on onFail/onError.
+    -->
+
+    <!--
+        tableExists: only run if the table doesn't exist yet.
+        onFail="MARK_RAN" → mark as run (skip) if table already exists.
+        Use case: making a changeset idempotent — safe to run even if partially applied.
+    -->
+    <changeSet id="w4-day2-001" author="khushal">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="product_tags"/>
+            </not>
+        </preConditions>
+        <createTable tableName="product_tags">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tag" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="product_tags" baseColumnNames="product_id"
+            constraintName="fk_product_tags_product"
+            referencedTableName="products" referencedColumnNames="id"/>
+        <rollback>
+            <dropTable tableName="product_tags"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        columnExists: only add a column if it doesn't exist yet.
+        Protects against running the changeset twice on the same DB.
+    -->
+    <changeSet id="w4-day2-002" author="khushal">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="products" columnName="weight_kg"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="products">
+            <column name="weight_kg" type="NUMERIC(8,3)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="products" columnName="weight_kg"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        sqlCheck: run custom SQL that must return a specific value.
+        Use case: ensure a required row exists before adding dependent data.
+    -->
+    <changeSet id="w4-day2-003" author="khushal">
+        <preConditions onFail="WARN">
+            <!--
+                Check that the 'electronics' category exists before inserting a subcategory.
+                onFail="WARN" → log a warning and continue (don't stop the migration).
+            -->
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM categories WHERE slug = 'electronics'
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="categories">
+            <column name="name" value="Laptops"/>
+            <column name="slug" value="laptops"/>
+            <column name="parent_id" valueComputed="(SELECT id FROM categories WHERE slug = 'electronics')"/>
+        </insert>
+        <rollback>
+            <delete tableName="categories"><where>slug = 'laptops'</where></delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        indexExists: only create an index if it doesn't already exist.
+    -->
+    <changeSet id="w4-day2-004" author="khushal">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="product_tags" indexName="idx_product_tags_tag"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="product_tags" indexName="idx_product_tags_tag">
+            <column name="tag"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="product_tags" indexName="idx_product_tags_tag"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        foreignKeyConstraintExists: guard FK addition
+    -->
+    <changeSet id="w4-day2-005" author="khushal">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <foreignKeyConstraintExists
+                    foreignKeyTableName="product_tags"
+                    foreignKeyName="fk_product_tags_product"/>
+            </not>
+        </preConditions>
+        <addUniqueConstraint
+            tableName="product_tags"
+            columnNames="product_id, tag"
+            constraintName="uq_product_tags_product_tag"/>
+        <rollback>
+            <dropUniqueConstraint
+                tableName="product_tags"
+                constraintName="uq_product_tags_product_tag"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        rowCount: only seed data if the table is empty.
+        Prevents duplicate inserts on re-run.
+    -->
+    <changeSet id="w4-day2-006" author="khushal" context="dev">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM product_tags
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="product_tags">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE name = 'MacBook Air M3' LIMIT 1)"/>
+            <column name="tag" value="apple"/>
+        </insert>
+        <insert tableName="product_tags">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE name = 'MacBook Air M3' LIMIT 1)"/>
+            <column name="tag" value="laptop"/>
+        </insert>
+        <rollback>
+            <delete tableName="product_tags"><where>tag IN ('apple', 'laptop')</where></delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

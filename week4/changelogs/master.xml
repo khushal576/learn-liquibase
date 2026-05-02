@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!-- Full course baseline -->
+    <include file="week3/changelogs/master.xml"/>
+
+    <!-- Day 2: Preconditions -->
+    <include file="week4/changelogs/day2-preconditions.xml"/>
+
+    <!-- Day 3: Multi-schema -->
+    <include file="week4/changelogs/day3-multi-schema.xml"/>
+
+    <!-- Day 5: Large data migrations -->
+    <include file="week4/changelogs/day5-large-migrations.xml"/>
+
+    <!-- Day 7: Final project -->
+    <include file="week4/changelogs/day7-final-project.xml"/>
+
+</databaseChangeLog>

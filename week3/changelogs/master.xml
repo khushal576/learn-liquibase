@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!-- Week 1 + 2 baseline -->
+    <include file="week2/changelogs/master.xml"/>
+
+    <!-- Day 1-3: changelog changes used to practice rollback -->
+    <include file="week3/changelogs/day1-rollback-practice.xml"/>
+
+    <!-- Day 2: complex rollback patterns -->
+    <include file="week3/changelogs/day2-complex-rollbacks.xml"/>
+
+    <!-- Day 4: schema used to demonstrate diff -->
+    <include file="week3/changelogs/day4-diff-target.xml"/>
+
+    <!-- Day 7: Spring Boot integration schema -->
+    <include file="week3/changelogs/day7-springboot-schema.xml"/>
+
+</databaseChangeLog>

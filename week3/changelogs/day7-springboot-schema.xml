@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 7 — Spring Boot Integration Schema
+        This is the master changelog that Spring Boot would point to.
+        In a real Spring Boot project this file would live at:
+          src/main/resources/db/changelog/db.changelog-master.xml
+
+        Spring Boot runs liquibase.update() automatically at startup
+        using the config in application.properties/yml.
+    -->
+
+    <!-- Spring Boot schema additions for session management -->
+    <changeSet id="w3-day7-001" author="khushal">
+        <createTable tableName="user_sessions">
+            <column name="id" type="VARCHAR(128)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ip_address" type="VARCHAR(45)"/>
+            <column name="user_agent" type="TEXT"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="user_sessions" baseColumnNames="user_id"
+            constraintName="fk_sessions_user"
+            referencedTableName="users" referencedColumnNames="id"/>
+        <createIndex tableName="user_sessions" indexName="idx_sessions_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="user_sessions"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Spring Boot Batch job metadata tables (if using Spring Batch) -->
+    <changeSet id="w3-day7-002" author="khushal" context="prod,staging">
+        <createTable tableName="job_executions">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="job_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_at" type="TIMESTAMP"/>
+            <column name="records_processed" type="INT" defaultValueNumeric="0"/>
+        </createTable>
+        <rollback>
+            <dropTable tableName="job_executions"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

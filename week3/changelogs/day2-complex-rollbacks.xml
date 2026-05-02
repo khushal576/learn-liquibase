@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 2 — Complex Rollback Patterns
+        Shows: multi-step rollbacks, data-loss scenarios, impossible rollbacks,
+               runOnChange rollback, and custom SQL rollback blocks.
+    -->
+
+    <!-- Pattern 1: Rollback that recreates a dropped table with data -->
+    <changeSet id="w3-day2-001" author="khushal">
+        <!--
+            We're "archiving" old cancelled orders into a separate table and
+            removing them from the main table.
+            Rollback must: recreate the archive table structure understanding
+            that restored data came from the archive.
+        -->
+        <createTable tableName="orders_archive">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT"/>
+            <column name="status" type="VARCHAR(20)"/>
+            <column name="total" type="NUMERIC(14,4)"/>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="archived_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <rollback>
+            <dropTable tableName="orders_archive"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Pattern 2: Rollback for a column rename (must preserve data) -->
+    <changeSet id="w3-day2-002" author="khushal">
+        <!--
+            Renaming a column is automatically rolled back by Liquibase
+            (it just swaps old/new names). But we document it explicitly
+            to show the pattern for rollback awareness.
+        -->
+        <renameColumn tableName="categories"
+                      oldColumnName="slug"
+                      newColumnName="url_key"
+                      columnDataType="VARCHAR(80)"/>
+        <rollback>
+            <renameColumn tableName="categories"
+                          oldColumnName="url_key"
+                          newColumnName="slug"
+                          columnDataType="VARCHAR(80)"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Pattern 3: Multi-step rollback — the rollback order matters -->
+    <changeSet id="w3-day2-003" author="khushal">
+        <!--
+            This changeset does 3 things. The rollback must undo them
+            in REVERSE ORDER: drop index → drop FK → drop column.
+        -->
+        <addColumn tableName="products">
+            <column name="supplier_id" type="BIGINT"/>
+        </addColumn>
+        <createIndex tableName="products" indexName="idx_products_supplier">
+            <column name="supplier_id"/>
+        </createIndex>
+        <rollback>
+            <!-- Reverse order: index first, then column -->
+            <dropIndex tableName="products" indexName="idx_products_supplier"/>
+            <dropColumn tableName="products" columnName="supplier_id"/>
+        </rollback>
+    </changeSet>
+
+    <!-- Pattern 4: runOnChange changeset rollback -->
+    <changeSet id="w3-day2-004" author="khushal" runOnChange="true" splitStatements="false">
+        <!--
+            Views with runOnChange: the rollback should DROP the view.
+            If you re-run update, it recreates it. So rollback = drop it.
+        -->
+        <sql>
+            CREATE OR REPLACE VIEW v_review_summary AS
+            SELECT
+                p.id AS product_id,
+                p.name AS product_name,
+                COUNT(r.id) AS review_count,
+                ROUND(AVG(r.rating), 2) AS avg_rating
+            FROM products p
+            LEFT JOIN product_reviews r ON r.product_id = p.id
+            GROUP BY p.id, p.name;
+        </sql>
+        <rollback>
+            <sql>DROP VIEW IF EXISTS v_review_summary;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Pattern 5: Changeset with NO possible rollback — document it explicitly -->
+    <changeSet id="w3-day2-005" author="khushal">
+        <!--
+            Dropping a column with data is irreversible — the data is gone.
+            Liquibase requires you to either:
+              a) Write a <rollback/> (empty) to acknowledge it
+              b) Or Liquibase will error when you try to rollback
+
+            Best practice: never do this without a backup. Archive first.
+        -->
+        <dropColumn tableName="users" columnName="date_of_birth"/>
+        <rollback>
+            <!--
+                We can recreate the column but NOT restore the data.
+                The rollback adds the column back as nullable (no data).
+            -->
+            <addColumn tableName="users">
+                <column name="date_of_birth" type="DATE"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

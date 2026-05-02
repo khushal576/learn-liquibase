@@ -178,6 +178,34 @@ docker compose run --rm liquibase $WEEK2 rollbackSQL --tag=week2-complete
 
 ---
 
+## Week 3 — Day by Day
+
+| Day | Notes | Changelog/File | What you learn |
+|-----|-------|----------------|----------------|
+| 1 | [day1-rollback-strategies.md](week3/notes/day1-rollback-strategies.md) | [day1-rollback-practice.xml](week3/changelogs/day1-rollback-practice.xml) | Tag/count/date-based rollback, `futureRollbackSQL` |
+| 2 | [day2-complex-rollbacks.md](week3/notes/day2-complex-rollbacks.md) | [day2-complex-rollbacks.xml](week3/changelogs/day2-complex-rollbacks.xml) | Multi-step rollbacks, data-loss patterns, empty rollback |
+| 3 | [day3-rollback-sql-preview.md](week3/notes/day3-rollback-sql-preview.md) | — | `updateSQL`, `rollbackSQL`, `rollbackCountSQL`, `history` |
+| 4 | [day4-diff-generatechangelog.md](week3/notes/day4-diff-generatechangelog.md) | [day4-diff-target.xml](week3/changelogs/day4-diff-target.xml) | `diff`, `diffChangeLog`, `generateChangeLog`, `changeLogSync` |
+| 5 | [day5-cicd-integration.md](week3/notes/day5-cicd-integration.md) | [github-actions.yml](week3/ci/github-actions.yml) | GitHub Actions, GitLab CI, Docker runner, approval gates |
+| 6 | [day6-cicd-pipelines.md](week3/notes/day6-cicd-pipelines.md) | [gitlab-ci.yml](week3/ci/gitlab-ci.yml) | Artifacts, secrets, manual rollback, per-env config |
+| 7 | [day7-springboot.md](week3/notes/day7-springboot.md) | [day7-springboot-schema.xml](week3/changelogs/day7-springboot-schema.xml) | Spring Boot auto-config, `application.yml`, Testcontainers |
+
+---
+
+## Week 4 — Day by Day
+
+| Day | Notes | Changelog | What you learn |
+|-----|-------|-----------|----------------|
+| 1 | [day1-properties-config.md](week4/notes/day1-properties-config.md) | — | `liquibase.properties`, env vars, priority order, flow files |
+| 2 | [day2-preconditions.md](week4/notes/day2-preconditions.md) | [day2-preconditions.xml](week4/changelogs/day2-preconditions.xml) | `tableExists`, `sqlCheck`, `onFail`, idempotent changesets |
+| 3 | [day3-multi-schema.md](week4/notes/day3-multi-schema.md) | [day3-multi-schema.xml](week4/changelogs/day3-multi-schema.xml) | Multiple schemas, cross-schema views, permissions, multi-tenant |
+| 4 | [day4-maven-gradle.md](week4/notes/day4-maven-gradle.md) | — | Maven plugin, Gradle plugin, lifecycle binding, profiles |
+| 5 | [day5-large-migrations.md](week4/notes/day5-large-migrations.md) | [day5-large-migrations.xml](week4/changelogs/day5-large-migrations.xml) | Batch backfill, `CONCURRENTLY`, `NOT VALID`, zero-downtime rename |
+| 6 | [day6-pro-features.md](week4/notes/day6-pro-features.md) | — | Flow files, quality checks, drift detection, structured logging |
+| 7 | [day7-final-project.md](week4/notes/day7-final-project.md) | [day7-final-project.xml](week4/changelogs/day7-final-project.xml) | Full lifecycle: validate → preview → tag → deploy → rollback |
+
+---
+
 ## The Golden Rules
 
 1. **Never edit a deployed changeset** — the MD5 hash will break. Add a new one instead.
@@ -203,5 +231,5 @@ docker compose down -v
 
 - [x] **Week 1** — Foundations: changelogs, changesets, core CLI
 - [x] **Week 2** — Change types: columns, constraints, data migrations, contexts
-- [ ] **Week 3** — Rollbacks, `diff`, `generateChangeLog`, CI/CD integration
-- [ ] **Week 4** — Advanced: preconditions, multi-schema, Maven/Gradle, production patterns
+- [x] **Week 3** — Rollbacks, `diff`, `generateChangeLog`, CI/CD integration
+- [x] **Week 4** — Advanced: preconditions, multi-schema, large migrations, production patterns

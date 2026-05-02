@@ -1,0 +1,144 @@
+name: Database Migrations
+
+on:
+  pull_request:
+    paths:
+      - '**/changelogs/**'
+      - '**/sql/**'
+  push:
+    branches:
+      - main
+
+env:
+  DB_URL: jdbc:postgresql://localhost:5432/learndb
+  DB_USER: liquibase
+  DB_PASSWORD: liquibase123
+  CHANGELOG: week3/changelogs/master.xml
+
+jobs:
+  # ── Runs on every PR that touches changelog files ──────────────────────────
+  validate:
+    name: Validate Changelogs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: liquibase
+          POSTGRES_PASSWORD: liquibase123
+          POSTGRES_DB: learndb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate changelog syntax
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            --changeLogFile=${{ env.CHANGELOG }}
+            validate
+
+      - name: Check pending changesets
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            --changeLogFile=${{ env.CHANGELOG }}
+            status --verbose
+
+      - name: Verify rollback plans (futureRollbackSQL)
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            --changeLogFile=${{ env.CHANGELOG }}
+            futureRollbackSQL
+
+      - name: Generate update SQL artifact
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            --changeLogFile=${{ env.CHANGELOG }}
+            updateSQL > migration-preview.sql
+
+      - name: Upload SQL preview as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-sql-preview
+          path: migration-preview.sql
+          retention-days: 30
+
+  # ── Runs on every merge to main ────────────────────────────────────────────
+  migrate:
+    name: Apply Migrations
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production   # Requires manual approval if configured
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: liquibase
+          POSTGRES_PASSWORD: liquibase123
+          POSTGRES_DB: learndb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag current DB state (rollback point)
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            tag --tag=pre-deploy-${{ github.sha }}
+
+      - name: Apply migrations
+        id: migrate
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            --changeLogFile=${{ env.CHANGELOG }}
+            update
+
+      - name: Rollback on migration failure
+        if: failure() && steps.migrate.outcome == 'failure'
+        uses: docker://liquibase/liquibase:4.27
+        with:
+          args: >
+            --url=${{ env.DB_URL }}
+            --username=${{ env.DB_USER }}
+            --password=${{ env.DB_PASSWORD }}
+            --changeLogFile=${{ env.CHANGELOG }}
+            rollback --tag=pre-deploy-${{ github.sha }}

@@ -1,0 +1,130 @@
+variables:
+  LIQUIBASE_IMAGE: liquibase/liquibase:4.27
+  CHANGELOG: week3/changelogs/master.xml
+  # Set these as CI/CD secrets in GitLab (Settings → CI/CD → Variables):
+  # DB_URL, DB_USER, DB_PASSWORD
+
+stages:
+  - validate
+  - migrate
+  - rollback
+
+# ── Template (reusable across jobs) ──────────────────────────────────────────
+.liquibase_base:
+  image: $LIQUIBASE_IMAGE
+  before_script:
+    - echo "Connecting to $DB_URL"
+
+# ── On every Merge Request ────────────────────────────────────────────────────
+validate-syntax:
+  extends: .liquibase_base
+  stage: validate
+  only:
+    - merge_requests
+  services:
+    - name: postgres:16
+      alias: postgres
+      variables:
+        POSTGRES_USER: $DB_USER
+        POSTGRES_PASSWORD: $DB_PASSWORD
+        POSTGRES_DB: learndb
+  script:
+    - liquibase
+        --url=$DB_URL
+        --username=$DB_USER
+        --password=$DB_PASSWORD
+        --changeLogFile=$CHANGELOG
+        validate
+  allow_failure: false
+
+validate-rollbacks:
+  extends: .liquibase_base
+  stage: validate
+  only:
+    - merge_requests
+  services:
+    - name: postgres:16
+      alias: postgres
+      variables:
+        POSTGRES_USER: $DB_USER
+        POSTGRES_PASSWORD: $DB_PASSWORD
+        POSTGRES_DB: learndb
+  script:
+    - liquibase
+        --url=$DB_URL
+        --username=$DB_USER
+        --password=$DB_PASSWORD
+        --changeLogFile=$CHANGELOG
+        futureRollbackSQL > rollback-preview.sql
+    - cat rollback-preview.sql
+  artifacts:
+    paths:
+      - rollback-preview.sql
+    expire_in: 7 days
+  allow_failure: false
+
+preview-sql:
+  extends: .liquibase_base
+  stage: validate
+  only:
+    - merge_requests
+  services:
+    - name: postgres:16
+      alias: postgres
+      variables:
+        POSTGRES_USER: $DB_USER
+        POSTGRES_PASSWORD: $DB_PASSWORD
+        POSTGRES_DB: learndb
+  script:
+    - liquibase
+        --url=$DB_URL
+        --username=$DB_USER
+        --password=$DB_PASSWORD
+        --changeLogFile=$CHANGELOG
+        updateSQL > migration-preview.sql
+    - cat migration-preview.sql
+  artifacts:
+    paths:
+      - migration-preview.sql
+    expire_in: 30 days
+
+# ── On merge to main ──────────────────────────────────────────────────────────
+migrate-production:
+  extends: .liquibase_base
+  stage: migrate
+  only:
+    - main
+  environment:
+    name: production
+  script:
+    # Tag before migrating
+    - liquibase
+        --url=$DB_URL
+        --username=$DB_USER
+        --password=$DB_PASSWORD
+        tag --tag=pre-deploy-$CI_COMMIT_SHA
+    # Apply migrations
+    - liquibase
+        --url=$DB_URL
+        --username=$DB_USER
+        --password=$DB_PASSWORD
+        --changeLogFile=$CHANGELOG
+        update
+  allow_failure: false
+
+# ── Manual rollback job (triggered manually in GitLab UI) ────────────────────
+rollback-production:
+  extends: .liquibase_base
+  stage: rollback
+  only:
+    - main
+  when: manual   # Must be triggered manually — never automatic
+  environment:
+    name: production
+  script:
+    - liquibase
+        --url=$DB_URL
+        --username=$DB_USER
+        --password=$DB_PASSWORD
+        --changeLogFile=$CHANGELOG
+        rollback --tag=pre-deploy-$CI_COMMIT_SHA

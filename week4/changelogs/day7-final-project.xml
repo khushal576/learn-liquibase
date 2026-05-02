@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 7 — Final Project
+        Combines every technique from the course into a cohesive release:
+        - Preconditions
+        - Multi-schema
+        - Contexts and labels
+        - Raw SQL (views, functions)
+        - Proper rollbacks
+        - Comments documenting the "why"
+    -->
+
+    <!--
+        Feature: Product Recommendation Engine
+        Adds the schema needed for a recommendation service.
+        Uses label="feature-recommendations" to control deployment timing.
+    -->
+    <changeSet id="w4-day7-001" author="khushal" labels="feature-recommendations">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="recommendations"/></not>
+        </preConditions>
+        <createTable tableName="recommendations">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="score" type="NUMERIC(5,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(50)"/>
+            <column name="generated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="recommendations" baseColumnNames="user_id"
+            constraintName="fk_recommendations_user"
+            referencedTableName="users" referencedColumnNames="id"
+            onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+            baseTableName="recommendations" baseColumnNames="product_id"
+            constraintName="fk_recommendations_product"
+            referencedTableName="products" referencedColumnNames="id"
+            onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="recommendations"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="w4-day7-002" author="khushal"
+               labels="feature-recommendations"
+               runInTransaction="false">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="recommendations" indexName="idx_recommendations_user_score"/>
+            </not>
+        </preConditions>
+        <sql>
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recommendations_user_score
+                ON recommendations(user_id, score DESC)
+                WHERE expires_at > CURRENT_TIMESTAMP;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_recommendations_user_score;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Analytics schema: track recommendation clicks -->
+    <changeSet id="w4-day7-003" author="khushal" labels="feature-recommendations">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="recommendation_events" schemaName="analytics"/>
+            </not>
+        </preConditions>
+        <createTable tableName="recommendation_events" schemaName="analytics">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="recommendation_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="event_type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="occurred_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <rollback>
+            <dropTable tableName="recommendation_events" schemaName="analytics"/>
+        </rollback>
+    </changeSet>
+
+    <!-- View combining public and analytics data -->
+    <changeSet id="w4-day7-004" author="khushal"
+               labels="feature-recommendations"
+               runOnChange="true"
+               splitStatements="false">
+        <sql>
+            CREATE OR REPLACE VIEW analytics.v_recommendation_performance AS
+            SELECT
+                r.id,
+                r.user_id,
+                r.product_id,
+                r.score,
+                r.reason,
+                COUNT(CASE WHEN e.event_type = 'CLICK' THEN 1 END)    AS clicks,
+                COUNT(CASE WHEN e.event_type = 'PURCHASE' THEN 1 END)  AS purchases,
+                r.generated_at,
+                r.expires_at
+            FROM recommendations r
+            LEFT JOIN analytics.recommendation_events e ON e.recommendation_id = r.id
+            GROUP BY r.id, r.user_id, r.product_id, r.score, r.reason,
+                     r.generated_at, r.expires_at;
+        </sql>
+        <rollback>
+            <sql>DROP VIEW IF EXISTS analytics.v_recommendation_performance;</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Dev seed: sample recommendations (context=dev + label) -->
+    <changeSet id="w4-day7-005" author="khushal"
+               context="dev"
+               labels="feature-recommendations">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM recommendations</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO recommendations(user_id, product_id, score, reason, expires_at)
+            SELECT
+                u.id,
+                p.id,
+                0.9500,
+                'TOP_SELLER',
+                CURRENT_TIMESTAMP + INTERVAL '7 days'
+            FROM users u, products p
+            WHERE u.username = 'alice'
+              AND p.name = 'MacBook Air M3'
+            LIMIT 1;
+        </sql>
+        <rollback>
+            <delete tableName="recommendations"><where>reason = 'TOP_SELLER'</where></delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Release cleanup: remove the temp sync trigger from day5
+        after a full rolling deploy is complete.
+        Uses label to control when this runs.
+    -->
+    <changeSet id="w4-day7-006" author="khushal" labels="post-rename-cleanup">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM information_schema.triggers
+                WHERE trigger_name = 'trg_sync_url_columns'
+                AND event_object_table = 'categories'
+            </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false">
+            DROP TRIGGER IF EXISTS trg_sync_url_columns ON categories;
+            DROP FUNCTION IF EXISTS sync_url_columns();
+        </sql>
+        <rollback/>
+    </changeSet>
+
+</databaseChangeLog>

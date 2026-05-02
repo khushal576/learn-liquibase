@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        DAY 5 — Large Data Migrations
+        Patterns for safely migrating millions of rows without locking tables
+        or causing timeouts. All examples use PostgreSQL-specific features.
+    -->
+
+    <!--
+        Pattern 1: Add column as nullable first, backfill in batches, then add NOT NULL.
+        For a 10M row table, adding NOT NULL directly would lock for minutes.
+        The batch approach keeps the table available.
+    -->
+    <changeSet id="w4-day5-001" author="khushal">
+        <!-- Step 1: Add nullable — instant, no lock -->
+        <addColumn tableName="orders">
+            <column name="priority" type="SMALLINT" defaultValueNumeric="0"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="orders" columnName="priority"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="w4-day5-002" author="khushal">
+        <!--
+            Step 2: Backfill in batches with a DO block.
+            Each batch commits independently — no single large transaction.
+            Adjust batch_size based on row size and available I/O.
+        -->
+        <sql splitStatements="false">
+            DO $$
+            DECLARE
+                batch_size INT := 1000;
+                offset_val INT := 0;
+                rows_updated INT;
+            BEGIN
+                LOOP
+                    UPDATE orders
+                    SET priority = CASE
+                        WHEN total > 500 THEN 2
+                        WHEN total > 100 THEN 1
+                        ELSE 0
+                    END
+                    WHERE id IN (
+                        SELECT id FROM orders
+                        WHERE priority IS NULL
+                        ORDER BY id
+                        LIMIT batch_size
+                    );
+
+                    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+                    EXIT WHEN rows_updated = 0;
+
+                    -- Small pause between batches to reduce I/O pressure
+                    PERFORM pg_sleep(0.01);
+                END LOOP;
+            END $$;
+        </sql>
+        <rollback>
+            <update tableName="orders">
+                <column name="priority" valueNumeric="0"/>
+            </update>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="w4-day5-003" author="khushal">
+        <!--
+            Step 3: Add NOT NULL now that all rows have a value.
+            Use NOT VALID + VALIDATE pattern to avoid table lock.
+        -->
+        <sql>
+            ALTER TABLE orders
+                ADD CONSTRAINT nn_orders_priority
+                CHECK (priority IS NOT NULL) NOT VALID;
+        </sql>
+        <sql>
+            -- VALIDATE acquires ShareUpdateExclusiveLock (allows reads and writes)
+            -- instead of the full AccessExclusiveLock of a regular NOT NULL
+            ALTER TABLE orders VALIDATE CONSTRAINT nn_orders_priority;
+        </sql>
+        <rollback>
+            <sql>ALTER TABLE orders DROP CONSTRAINT IF EXISTS nn_orders_priority;</sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Pattern 2: Add index CONCURRENTLY — no table lock.
+        Standard CREATE INDEX takes AccessShareLock (blocks writes).
+        CREATE INDEX CONCURRENTLY takes ShareUpdateExclusiveLock (allows writes).
+        Trade-off: takes longer, must be done outside a transaction.
+    -->
+    <changeSet id="w4-day5-004" author="khushal" runInTransaction="false">
+        <!--
+            runInTransaction="false" is REQUIRED for CONCURRENTLY.
+            CONCURRENTLY cannot run inside a transaction block.
+        -->
+        <sql splitStatements="false">
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_priority_status
+                ON orders(priority, status)
+                WHERE priority > 0;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_orders_priority_status;</sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Pattern 3: Rename a high-traffic column safely using a 4-step deploy.
+        Step A (this deploy): add new column, populate it, add trigger to keep in sync.
+        Step B (next deploy): remove old column, drop trigger.
+        This allows rolling deploys without downtime.
+    -->
+    <changeSet id="w4-day5-005" author="khushal">
+        <!-- Add the new column name alongside the old one -->
+        <addColumn tableName="categories">
+            <column name="url_slug" type="VARCHAR(80)"/>
+        </addColumn>
+        <!-- Copy existing data from url_key to url_slug -->
+        <sql>UPDATE categories SET url_slug = url_key;</sql>
+        <rollback>
+            <dropColumn tableName="categories" columnName="url_slug"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="w4-day5-006" author="khushal" splitStatements="false">
+        <!--
+            Trigger keeps both columns in sync during the transition period
+            when old and new app versions run simultaneously (rolling deploy).
+        -->
+        <sql>
+            CREATE OR REPLACE FUNCTION sync_url_columns()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+                    IF NEW.url_key IS DISTINCT FROM OLD.url_key THEN
+                        NEW.url_slug = NEW.url_key;
+                    END IF;
+                    IF NEW.url_slug IS DISTINCT FROM OLD.url_slug THEN
+                        NEW.url_key = NEW.url_slug;
+                    END IF;
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trg_sync_url_columns
+                BEFORE INSERT OR UPDATE ON categories
+                FOR EACH ROW EXECUTE FUNCTION sync_url_columns();
+        </sql>
+        <rollback>
+            <sql>
+                DROP TRIGGER IF EXISTS trg_sync_url_columns ON categories;
+                DROP FUNCTION IF EXISTS sync_url_columns();
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

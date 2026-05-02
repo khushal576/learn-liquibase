@@ -54,11 +54,10 @@ services:
       - "--changeLogFile=week2/changelogs/master.xml"
       - "update"
 
-  # Generic runner — pass command via `docker compose run`
-  # Example: docker compose run --rm liquibase --changeLogFile=week2/changelogs/master.xml status
-  liquibase:
+  # Week 3 runner — applies week1 + week2 + week3 changelogs
+  liquibase-week3:
     image: liquibase/liquibase:4.27
-    container_name: liquibase_runner
+    container_name: liquibase_week3
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,8 +69,45 @@ services:
       - "--url=jdbc:postgresql://postgres:5432/learndb"
       - "--username=liquibase"
       - "--password=liquibase123"
-      - "--changeLogFile=week1/changelogs/master.xml"
+      - "--changeLogFile=week3/changelogs/master.xml"
       - "update"
+
+  # Week 4 runner — full course
+  liquibase-week4:
+    image: liquibase/liquibase:4.27
+    container_name: liquibase_week4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../:/liquibase/project
+    working_dir: /liquibase/project
+    entrypoint: ["liquibase"]
+    command:
+      - "--url=jdbc:postgresql://postgres:5432/learndb"
+      - "--username=liquibase"
+      - "--password=liquibase123"
+      - "--changeLogFile=week4/changelogs/master.xml"
+      - "update"
+
+  # Generic runner — pass any command via `docker compose run`
+  # Usage: docker compose run --rm liquibase <args>
+  # Example: docker compose run --rm liquibase \
+  #            --url=jdbc:postgresql://postgres:5432/learndb \
+  #            --username=liquibase --password=liquibase123 \
+  #            --changeLogFile=week4/changelogs/master.xml \
+  #            status --verbose
+  liquibase:
+    image: liquibase/liquibase:4.27
+    container_name: liquibase_runner
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../:/liquibase/project
+    working_dir: /liquibase/project
+    entrypoint: ["liquibase"]
+    command: ["--help"]
 
 volumes:
   pgdata:
